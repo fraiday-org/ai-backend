@@ -118,6 +118,10 @@ def generate_ai_response_task(self, session_data: dict):
             )
 
             if confidence_score == 0:
+                # Set has_handover flag on the chat session
+                message.session.has_handover = True
+                message.session.save()
+                
                 # Publish handover event manually
                 EventPublisher.publish(
                     event_type=EventType.CHAT_WORKFLOW_HANDOVER,
