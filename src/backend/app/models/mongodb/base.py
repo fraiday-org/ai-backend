@@ -6,7 +6,7 @@ class BaseDocument(Document):
     created_at = fields.DateTimeField(default=datetime_utc_now)
     updated_at = fields.DateTimeField(default=datetime_utc_now)
 
-    meta = {"abstract": True}
+    meta = {"abstract": True, "strict": False}
 
     def to_serializable_dict(self):
         """Custom method for serialization with _id as string."""
