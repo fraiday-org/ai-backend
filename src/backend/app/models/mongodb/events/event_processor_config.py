@@ -20,6 +20,7 @@ class EventProcessorConfig(BaseDocument):
     name = fields.StringField(required=True)
     description = fields.StringField()
     client = fields.ReferenceField("Client", required=True)
+    client_channel = fields.ReferenceField("ClientChannel", required=False)
     processor_type = fields.StringField(choices=[t.value for t in ProcessorType], required=True)
 
     # Processor-specific configuration
@@ -35,9 +36,17 @@ class EventProcessorConfig(BaseDocument):
         "collection": "event_processor_configs",
         "indexes": [
             "client",
+            "client_channel",
             "processor_type",
             "is_active",
             ("client", "is_active"),
+            # Add unique constraint for client, client_channel, is_active combination
+            {
+                "fields": ("client", "client_channel", "is_active"),
+                "unique": True,
+                # Only apply uniqueness when is_active is True to allow multiple inactive processors
+                "sparse": False
+            },
             ("event_types", "is_active"),
             ("entity_types", "is_active"),
         ],

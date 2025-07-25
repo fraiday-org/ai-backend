@@ -42,8 +42,13 @@ class ChatMessageService:
         from app.models.mongodb.channel_request_log import EntityType
 
         client = ClientService.get_client(message_data.client_id)
+        
+        # Use channel_id if available, otherwise fall back to channel_type
+        channel_id = getattr(message_data, 'client_channel_id', None)
         client_channel = ClientChannelService.get_channel_by_type(
-            client_id=message_data.client_id, channel_type=message_data.client_channel_type
+            client_id=message_data.client_id, 
+            channel_type=message_data.client_channel_type,
+            channel_id=channel_id
         )
 
         base_session_id = message_data.session_id
@@ -207,8 +212,13 @@ class ChatMessageService:
         responses = []
         session = None
         client = ClientService.get_client(bulk_message_data.client_id)
+        
+        # Use channel_id if available, otherwise fall back to channel_type
+        channel_id = getattr(bulk_message_data, 'client_channel_id', None)
         client_channel = ClientChannelService.get_channel_by_type(
-            client_id=bulk_message_data.client_id, channel_type=bulk_message_data.client_channel_type
+            client_id=bulk_message_data.client_id, 
+            channel_type=bulk_message_data.client_channel_type,
+            channel_id=channel_id
         )
 
         try:

@@ -17,6 +17,7 @@ from .endpoints.metrics import router as metrics_router
 from .endpoints.analytics import router as analytics_router
 from .endpoints.chat_session_thread import router as chat_session_thread_router
 from .client.user_type import router as client_user_type_router
+from .endpoints.workflow_config import router as workflow_config_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
@@ -37,3 +38,4 @@ api_v1_router.include_router(metrics_router)
 api_v1_router.include_router(analytics_router)
 api_v1_router.include_router(client_user_type_router)
 api_v1_router.include_router(chat_session_thread_router)
+api_v1_router.include_router(workflow_config_router)

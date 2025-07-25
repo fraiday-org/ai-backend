@@ -31,6 +31,7 @@ async def create_processor_config(data: ProcessorConfigCreate, api_key: str = De
             entity_types=data.entity_types,
             description=data.description,
             is_active=data.is_active,
+            client_channel_id=data.client_channel_id,
         )
 
         return ProcessorConfigResponse.from_db_model(processor)

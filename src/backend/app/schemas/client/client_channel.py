@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, List, Union
+from pydantic import BaseModel
+from typing import Optional, Dict, Union
 
 from app.models.mongodb.client_channel import ChannelType
 
@@ -15,13 +15,22 @@ class SlackWebhookConfig(BaseModel):
 
 
 class ClientChannelCreateorUpdateRequest(BaseModel):
+    channel_id: Optional[str] = None
     channel_type: ChannelType
     channel_config: Union[WebhookChannelConfig, SlackWebhookConfig]
     is_active: Optional[bool] = True
 
 
+class ClientChannelUpdateRequest(BaseModel):
+    channel_id: Optional[str] = None
+    channel_type: Optional[ChannelType] = None
+    channel_config: Optional[Union[WebhookChannelConfig, SlackWebhookConfig]] = None
+    is_active: Optional[bool] = None
+
+
 class ClientChannelResponse(BaseModel):
     id: str
+    channel_id: Optional[str] = None
     channel_type: ChannelType
     channel_config: Union[WebhookChannelConfig, SlackWebhookConfig]
     is_active: bool

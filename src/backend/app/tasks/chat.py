@@ -57,8 +57,9 @@ def generate_ai_response_task(self, session_data: dict):
         )
 
         # Process the AI request (existing code)
+        workflow_id = session_data.get("workflow_id")
         processor = AIService()
-        processed_message = processor.get_response(message_id=message_id)
+        processed_message = processor.get_response(message_id=message_id, workflow_id=workflow_id)
 
         # Create appropriate response entity
         chat_message_config = message.get_message_config()
@@ -189,90 +190,87 @@ def generate_ai_response_task(self, session_data: dict):
         raise exc
 
 
-@shared_task(bind=True, max_retries=3)
-def send_to_webhook_task(self, message_data: dict):
-    try:
-        logger.info(f"Session data: {message_data}")
-
-        entity_id = message_data["entity_id"]
-        entity_type = message_data["entity_type"]
-
-        strategies = {
-            EntityType.CHAT_MESSAGE: MessagePayloadStrategy(),
-            EntityType.CHAT_SUGGESTION: SuggestionPayloadStrategy(),
-        }
-        strategy = strategies[entity_type]
-
-        # Get message based on strategy type
-        entity = strategy.get_entity(entity_id=entity_id)
-        session = strategy.get_session(entity=entity)
-
-        # Get or create the ChannelRequestLog
-        request_log, created = ChannelRequestLogService.get_or_create(
-            entity=entity,
-            channel=session.client_channel,
-        )
-        webhook_url = ClientChannelService.get_channel_webhook_url(
-            client_id=session.client.id,
-            channel_id=session.client_channel.id,
-        )
-
-        payload = strategy.create_payload(entity=entity)
-        response = requests.post(webhook_url, json=payload)
-        response.raise_for_status()
-
-        response_data = response.json()
-        strategy.handle_response(entity=entity, response_data=response_data)
-
-        # Log the successful attempt
-        ChannelRequestLogService.log_attempt(
-            request_log=request_log,
-            attempt_number=self.request.retries + 1,
-            success=True,
-            response_status=response.status_code,
-            response_body=response.json(),
-        )
-
-    except RequestException as exc:
-        logger.error(f"Webhook notification failed: {exc}")
-
-        # Log the failed attempt
-        request_log = ChannelRequestLog.objects.get(
-            entity_id=entity_id, entity_type=entity_type
-        )  # Ensure we fetch the log
-        ChannelRequestLogService.log_attempt(
-            request_log=request_log,
-            attempt_number=self.request.retries + 1,
-            success=False,
-            error_message=str(exc),
-        )
-        raise self.retry(exc=exc, countdown=60)  # Retry after 60 seconds
-
-    except Exception as exc:
-        # For internal errors, just log and fail gracefully
-        logger.error(
-            "Critical internal error in webhook task",
-            extra={"entity_id": entity_id, "entity_type": entity_type, "error": str(exc)},
-            exc_info=True,
-        )
-        raise
-
-
 def trigger_chat_workflow(message_id: str, session_id: str):
     """
-    Starts the message processing chain.
+    Starts the message processing chain with configurable workflow ID.
     """
+    from app.services.workflow_config import WorkflowConfigService
+    from app.core.config import settings
+    from app.models.mongodb.chat_message import ChatMessage
+    
+    # Get workflow ID based on client and channel
+    workflow_id = settings.SLACK_AI_SERVICE_WORKFLOW_ID
+    
+    # Use configurable workflow if feature flag is enabled
+    if settings.ENABLE_CONFIGURABLE_WORKFLOWS:
+        try:
+            # Get message to determine client and channel
+            message = ChatMessage.objects.get(id=message_id)
+            client_id = str(message.session.client.id)
+            client_channel_id = str(message.session.client_channel.id) if message.session.client_channel else None
+            
+            # Get workflow ID from configuration with fallback to env var
+            workflow_id = WorkflowConfigService.get_workflow_id(
+                client_id=client_id,
+                client_channel_id=client_channel_id,
+            )
+            logger.info(f"Using workflow ID {workflow_id} for chat message {message_id}")
+        except Exception as e:
+            logger.error(f"Error getting workflow ID for chat message {message_id}: {e}", exc_info=True)
+            # Fall back to default workflow ID
+            workflow_id = settings.SLACK_AI_SERVICE_WORKFLOW_ID
+    
+    # Use the workflow ID in the task
     process_chain = chain(
-        generate_ai_response_task.s(session_data={"message_id": message_id, "session_id": session_id}),
+        generate_ai_response_task.s(
+            session_data={
+                "message_id": message_id, 
+                "session_id": session_id,
+                "workflow_id": workflow_id
+            }
+        ),
     )
     process_chain.apply_async()
 
 
 def trigger_suggestion_workflow(message_id: str, session_id: str):
     """
-    Starts the message processing chain.
+    Starts the message processing chain with configurable workflow ID.
     """
+    from app.services.workflow_config import WorkflowConfigService
+    from app.core.config import settings
+    from app.models.mongodb.chat_message import ChatMessage
+    
+    # Get workflow ID based on client and channel
+    workflow_id = settings.SLACK_AI_SERVICE_WORKFLOW_ID
+    
+    # Use configurable workflow if feature flag is enabled
+    if settings.ENABLE_CONFIGURABLE_WORKFLOWS:
+        try:
+            # Get message to determine client and channel
+            message = ChatMessage.objects.get(id=message_id)
+            client_id = str(message.session.client.id)
+            client_channel_id = str(message.session.client_channel.id) if message.session.client_channel else None
+            
+            # Get workflow ID from configuration with fallback to env var
+            workflow_id = WorkflowConfigService.get_workflow_id(
+                client_id=client_id,
+                client_channel_id=client_channel_id,
+            )
+            logger.info(f"Using workflow ID {workflow_id} for suggestion message {message_id}")
+        except Exception as e:
+            logger.error(f"Error getting workflow ID for suggestion message {message_id}: {e}", exc_info=True)
+            # Fall back to default workflow ID
+            workflow_id = settings.SLACK_AI_SERVICE_WORKFLOW_ID
+    
+    # Use the workflow ID in the task
     process_chain = chain(
-        generate_ai_response_task.s(session_data={"message_id": message_id, "session_id": session_id}),
+        generate_ai_response_task.s(
+            session_data={
+                "message_id": message_id, 
+                "session_id": session_id,
+                "workflow_id": workflow_id
+            }
+        ),
     )
     process_chain.apply_async()

@@ -18,6 +18,7 @@ class ProcessorConfigCreate(BaseModel):
     entity_types: List[EntityType]
     description: Optional[str] = Field(None)
     is_active: bool = Field(default=True)
+    client_channel_id: Optional[str] = Field(None, description="Optional client channel ID to associate with this processor")
 
 
 class ProcessorConfigUpdate(BaseModel):
@@ -29,6 +30,7 @@ class ProcessorConfigUpdate(BaseModel):
     entity_types: Optional[List[EntityType]] = Field(None)
     description: Optional[str] = Field(None)
     is_active: Optional[bool] = Field(None)
+    client_channel_id: Optional[str] = Field(None, description="Optional client channel ID to associate with this processor")
 
 
 class ProcessorConfigResponse(BaseModel):
@@ -45,6 +47,7 @@ class ProcessorConfigResponse(BaseModel):
     entity_types: List[str]
     description: Optional[str] = None
     is_active: bool
+    client_channel_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -69,6 +72,7 @@ class ProcessorConfigResponse(BaseModel):
             entity_types=db_model.entity_types,
             description=db_model.description,
             is_active=db_model.is_active,
+            client_channel_id=str(db_model.client_channel.id) if db_model.client_channel else None,
             created_at=db_model.created_at,
             updated_at=db_model.updated_at,
         )

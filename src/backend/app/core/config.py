@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     REDIS_PORT: Optional[int] = None
     REDIS_DB: Optional[int] = None
     REDIS_PASSWORD: Optional[str] = None
+    
+    # Feature flags
+    ENABLE_CLIENT_CHANNEL_ROUTING: bool = False
+    ENABLE_CONFIGURABLE_WORKFLOWS: bool = False
 
     def get_redis_url(self) -> str:
         """Generate Redis URL from components if CELERY_BROKER_URL is not provided"""

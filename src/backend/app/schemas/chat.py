@@ -68,6 +68,7 @@ class BaseChatMessageCreate(BaseModel):
 class ChatMessageCreate(BaseChatMessageCreate):
     client_id: str = None
     client_channel_type: str = None
+    client_channel_id: Optional[str] = None
     session_id: str = None
     config: Optional[MessageConfig] = Field(default_factory=MessageConfig)
     external_id: Optional[str] = None
@@ -78,6 +79,7 @@ class BulkChatMessageCreate(BaseModel):
     session_id: str
     client_id: str = None
     client_channel_type: str = None
+    client_channel_id: Optional[str] = None
 
 
 class ChatMessageResponse(BaseModel):

@@ -1,5 +1,5 @@
 from .client import ClientCreateorUpdateRequest, ClientResponse
-from .client_channel import ClientChannelCreateorUpdateRequest, ClientChannelResponse
+from .client_channel import ClientChannelCreateorUpdateRequest, ClientChannelResponse, ClientChannelUpdateRequest
 from .chat_config import ChatConfig
 
 __all__ = [
@@ -7,5 +7,6 @@ __all__ = [
     "ClientResponse",
     "ClientChannelCreateorUpdateRequest", 
     "ClientChannelResponse",
+    "ClientChannelUpdateRequest",
     "ChatConfig"
 ]

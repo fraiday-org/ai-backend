@@ -30,6 +30,7 @@ class ProcessorConfigService:
         entity_types: List[EntityType],
         description: Optional[str] = None,
         is_active: bool = True,
+        client_channel_id: Optional[str] = None,
     ) -> EventProcessorConfig:
         """
         Create a new processor configuration of any supported type.
@@ -70,10 +71,20 @@ class ProcessorConfigService:
             except Client.DoesNotExist:
                 raise ValueError(f"Client with ID {client_id} does not exist")
 
+            # Get client channel if provided
+            client_channel = None
+            if client_channel_id:
+                from app.models.mongodb.client_channel import ClientChannel
+                try:
+                    client_channel = ClientChannel.objects.get(id=client_channel_id)
+                except ClientChannel.DoesNotExist:
+                    raise ValueError(f"Client channel with ID {client_channel_id} does not exist")
+            
             processor_config = EventProcessorConfig(
                 name=name,
                 description=description,
                 client=client,
+                client_channel=client_channel,
                 processor_type=processor_type,
                 config=typed_config.model_dump(),
                 event_types=[et.value for et in event_types],
@@ -88,7 +99,7 @@ class ProcessorConfigService:
         except ValidationError as e:
             logger.error(f"Invalid {processor_type} config: {e}", exc_info=True)
             raise ValueError(f"Invalid {processor_type} configuration: {str(e)}")
-        except Exception as e:
+        except Exception:
             logger.error(f"Failed to create {processor_type} processor {name}", exc_info=True)
             raise
 
@@ -101,6 +112,7 @@ class ProcessorConfigService:
         entity_types: List[EntityType],
         description: Optional[str] = None,
         is_active: bool = True,
+        client_channel_id: Optional[str] = None,
     ) -> EventProcessorConfig:
         """Convenience method to create HTTP webhook processor"""
         return ProcessorConfigService.create_processor_config(
@@ -112,6 +124,7 @@ class ProcessorConfigService:
             entity_types=entity_types,
             description=description,
             is_active=is_active,
+            client_channel_id=client_channel_id,
         )
 
     @staticmethod
@@ -123,6 +136,7 @@ class ProcessorConfigService:
         entity_types: List[EntityType],
         description: Optional[str] = None,
         is_active: bool = True,
+        client_channel_id: Optional[str] = None,
     ) -> EventProcessorConfig:
         """Convenience method to create AMQP processor"""
         return ProcessorConfigService.create_processor_config(
@@ -134,23 +148,57 @@ class ProcessorConfigService:
             entity_types=entity_types,
             description=description,
             is_active=is_active,
+            client_channel_id=client_channel_id,
         )
 
     @staticmethod
     def get_matching_processors(
-        client_id: str, event_type: EventType, entity_type: EntityType
+        client_id: str, event_type: EventType, entity_type: EntityType, client_channel_id: Optional[str] = None
     ) -> List[EventProcessorConfig]:
         """
         Find all active processor configurations that match the given criteria.
+        If client_channel_id is provided, first look for channel-specific processors,
+        then fall back to client-level processors if none are found.
         """
         try:
-            processors = EventProcessorConfig.objects(
-                client=client_id, is_active=True, event_types__in=[event_type], entity_types__in=[entity_type]
+            # If no client_channel_id is provided, just use client-level processors
+            if not client_channel_id:
+                logger.info(f"No channel_id provided. Using client_level processors. client_id {client_id}")
+                processors = EventProcessorConfig.objects(
+                    client=client_id, 
+                    client_channel=None,
+                    is_active=True, 
+                    event_types__in=[event_type], 
+                    entity_types__in=[entity_type]
+                )
+                return processors
+            
+            # Try to find channel-specific processors first
+            channel_processors = EventProcessorConfig.objects(
+                client=client_id,
+                client_channel=client_channel_id,
+                is_active=True,
+                event_types__in=[event_type],
+                entity_types__in=[entity_type]
             )
+            
+            # If channel-specific processors exist, use them
+            if channel_processors:
+                return channel_processors
+            
+            logger.info(f"Did not find any channel specific processors for client_channel_id: {client_channel_id} and client_id: {client_id}")
+            # Otherwise, fall back to client-level processors
+            client_processors = EventProcessorConfig.objects(
+                client=client_id,
+                client_channel=None,
+                is_active=True,
+                event_types__in=[event_type],
+                entity_types__in=[entity_type]
+            )
+            
+            return client_processors
 
-            return processors
-
-        except Exception as e:
+        except Exception:
             logger.error(f"Error finding processors for client {client_id}, event {event_type}", exc_info=True)
             return []
 
@@ -169,7 +217,7 @@ class ProcessorConfigService:
         except EventProcessorConfig.DoesNotExist:
             logger.error(f"Processor config {processor_id} not found", exc_info=True)
             return False
-        except Exception as e:
+        except Exception:
             logger.error(f"Error deactivating processor config {processor_id}", exc_info=True)
             raise
 
@@ -198,7 +246,7 @@ class ProcessorConfigService:
         except EventProcessorConfig.DoesNotExist:
             logger.error(f"Processor config {processor_id} not found", exc_info=True)
             return None
-        except Exception as e:
+        except Exception:
             logger.error(f"Error updating processor config {processor_id}", exc_info=True)
             raise
 
@@ -212,8 +260,8 @@ class ProcessorConfigService:
         except EventProcessorConfig.DoesNotExist:
             logger.error(f"Processor {processor_id} not found", exc_info=True)
             return None
-        except Exception as e:
-            logger.error(f"Error getting processor {processor_id}", exc_info=True)
+        except Exception:
+            logger.error(f"Error retrieving processor config {processor_id}", exc_info=True)
             return None
 
     @staticmethod
@@ -240,6 +288,6 @@ class ProcessorConfigService:
             processors = EventProcessorConfig.objects(**query).skip(skip).limit(limit)
             return list(processors)
 
-        except Exception as e:
-            logger.error(f"Error listing processors", exc_info=True)
+        except Exception:
+            logger.error("Error retrieving processor configs", exc_info=True)
             return []

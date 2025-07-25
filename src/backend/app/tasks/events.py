@@ -15,9 +15,12 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def _get_client_id_for_entity(entity_type: str, entity_id: str) -> Optional[str]:
+def _get_entity_client_info(entity_type: str, entity_id: str) -> tuple[Optional[str], Optional[str]]:
     """
-    Helper function to determine client_id for different entity types.
+    Helper function to determine client_id and client_channel_id for different entity types.
+    
+    Returns:
+        Tuple of (client_id, client_channel_id)
     """
     from app.models.mongodb.chat_message import ChatMessage
     from app.models.mongodb.chat_session import ChatSession
@@ -25,29 +28,35 @@ def _get_client_id_for_entity(entity_type: str, entity_id: str) -> Optional[str]
     try:
         if entity_type == EntityType.CHAT_MESSAGE:
             message = ChatMessage.objects.get(id=entity_id)
-            return str(message.session.client.id)
+            client_id = str(message.session.client.id)
+            client_channel_id = str(message.session.client_channel.id) if message.session.client_channel else None
+            return client_id, client_channel_id
 
         elif entity_type == EntityType.CHAT_SESSION:
             session = ChatSession.objects.get(id=entity_id)
-            return str(session.client.id)
+            client_id = str(session.client.id)
+            client_channel_id = str(session.client_channel.id) if session.client_channel else None
+            return client_id, client_channel_id
         
         elif entity_type == EntityType.CHAT_SUGGESTION:
             suggestion = ChatMessageSuggestion.objects.get(id=entity_id)
-            return str(suggestion.chat_session.client.id)
+            client_id = str(suggestion.chat_session.client.id)
+            client_channel_id = str(suggestion.chat_session.client_channel.id) if suggestion.chat_session.client_channel else None
+            return client_id, client_channel_id
 
         elif entity_type == EntityType.AI_SERVICE:
             # For AI service events, we need to find the related chat message
             # This assumes parent_id points to a chat message
             events = EventService.get_entity_events(entity_type=EntityType.AI_SERVICE, entity_id=entity_id)
             if events and events[0].parent_id:
-                return _get_client_id_for_entity(entity_type=EntityType.CHAT_MESSAGE, entity_id=events[0].parent_id)
+                return _get_entity_client_info(entity_type=EntityType.CHAT_MESSAGE, entity_id=events[0].parent_id)
 
-        logger.error(f"Could not determine client_id for {entity_type}:{entity_id}")
-        return None
+        logger.error(f"Could not determine client info for {entity_type}:{entity_id}")
+        return None, None
 
     except Exception as e:
-        logger.error(f"Error determining client_id for {entity_type}:{entity_id}", exc_info=True)
-        return None
+        logger.error(f"Error determining client info for {entity_type}:{entity_id}", exc_info=True)
+        return None, None
 
 
 @shared_task(bind=True, queue="events")
@@ -70,15 +79,18 @@ def process_event(
             logger.error(f"Event {event_id} not found")
             return {"status": "error", "message": "Event not found"}
 
-        # Get client_id from the entity
-        client_id = _get_client_id_for_entity(entity_type, entity_id)
+        # Get client_id and client_channel_id from the entity
+        client_id, client_channel_id = _get_entity_client_info(entity_type, entity_id)
         if not client_id:
             logger.error(f"Could not determine client_id for {entity_type}:{entity_id}")
             return {"status": "error", "message": "Client ID not found"}
 
-        # Find matching processors for this event
+        # Find matching processors for this event, including client channel routing if available
         processors = ProcessorConfigService.get_matching_processors(
-            client_id=client_id, event_type=event_type, entity_type=entity_type
+            client_id=client_id, 
+            event_type=event_type, 
+            entity_type=entity_type,
+            client_channel_id=client_channel_id
         )
 
         if not processors:
