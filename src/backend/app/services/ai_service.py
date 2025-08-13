@@ -1,13 +1,11 @@
-import re
 import requests
 import traceback
 import logging
 import json
-from datetime import timedelta
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 from app.core.config import settings
-from app.schemas.ai_response import AIResponse, AIServiceRequest, Data, Answer
+from app.schemas.ai_response import AIResponse, AIServiceRequest, Data, Answer, Metadata
 from app.schemas.chat import AttachmentCreate
 from app.models.mongodb.client_channel import ChannelType, ClientChannel
 from app.utils.logger import get_logger
@@ -40,6 +38,11 @@ class AIService:
                 )
                 ai_response = response.json()
 
+                # Extract metadata if present in the response
+                metadata_dict = {}
+                if "metadata" in ai_response["result"]:
+                    metadata_dict = ai_response["result"]["metadata"]
+                
                 return AIResponse(
                     status=ai_response["status"],
                     message="",
@@ -53,6 +56,9 @@ class AIService:
                             ],
                         ),
                         confidence_score=ai_response["result"].get("confidence_score", 0.9),
+                    ),
+                    metadata=Metadata(
+                        close_session=metadata_dict.get("close_session", False)
                     ),
                 )
             else:
@@ -91,8 +97,10 @@ class AIService:
         # Add carousel data if present
         if attachment_type == "carousel" and "carousel" in attachment:
             result["carousel"] = attachment["carousel"]
+        
+        if attachment_type == "buttons" and "buttons" in attachment:
+            result["buttons"] = attachment["buttons"]
 
-        print(result)
         return AttachmentCreate(**result)
 
     def prepare_payload(self, message_id: str):

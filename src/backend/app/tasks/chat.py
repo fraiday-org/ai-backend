@@ -59,6 +59,11 @@ def generate_ai_response_task(self, session_data: dict):
         # Process the AI request (existing code)
         processor = AIService()
         processed_message = processor.get_response(message_id=message_id)
+        
+        # Check if session should be closed based on metadata
+        close_session_flag = False
+        if hasattr(processed_message, 'metadata') and processed_message.metadata:
+            close_session_flag = processed_message.metadata.close_session
 
         # Create appropriate response entity
         chat_message_config = message.get_message_config()
@@ -121,7 +126,7 @@ def generate_ai_response_task(self, session_data: dict):
                 # Set has_handover flag on the chat session
                 message.session.has_handover = True
                 message.session.save()
-                
+
                 # Publish handover event manually
                 EventPublisher.publish(
                     event_type=EventType.CHAT_WORKFLOW_HANDOVER,
@@ -139,6 +144,26 @@ def generate_ai_response_task(self, session_data: dict):
                     },
                 )
 
+        # Handle session closing if flag is set
+        if close_session_flag:
+            # Import inside function to avoid circular imports
+            from app.services.chat.thread_manager import ThreadManager
+            
+            session_id = str(message.session.session_id)
+            
+            # Check if threading is enabled for this session
+            threading_enabled, _ = ThreadManager.is_threading_enabled_for_session(session_id)
+            
+            if threading_enabled:
+                # Close the active thread for this session
+                ThreadManager.close_thread(session_id)
+                logger.info(f"Closed thread for session {session_id} based on AI response metadata")
+            else:
+                # Mark the session as inactive if threading is not enabled
+                message.session.active = False
+                message.session.save()
+                logger.info(f"Marked session {session_id} as inactive based on AI response metadata")
+        
         # No more send_to_webhook_task!
         return {"status": "success"}
 
@@ -159,14 +184,14 @@ def generate_ai_response_task(self, session_data: dict):
         logger.info(f"Creating system error message on session data {session_data}")
         session_id_filter = get_session_id_filter(session_data["session_id"])
         session = ChatSession.objects(session_id_filter).first()
-        
+
         # Get client's custom error message if available
         custom_error_message = DEFAULT_AI_SERVICE_ERROR_MESSAGE
         if session and session.client:
             try:
                 client = session.client
-                if client.chat_config and 'error_message' in client.chat_config:
-                    custom_error_message = client.chat_config['error_message']
+                if client.chat_config and "error_message" in client.chat_config:
+                    custom_error_message = client.chat_config["error_message"]
                 else:
                     # If client has no chat_config or no error_message in it, use default
                     if not client.chat_config:
@@ -174,7 +199,7 @@ def generate_ai_response_task(self, session_data: dict):
                     logger.info(f"Using default error message for client {client.client_id}")
             except Exception as e:
                 logger.error(f"Error getting client error message: {e}")
-        
+
         error_message = create_system_chat_message(
             session=session,
             error_message=custom_error_message,

@@ -18,6 +18,13 @@ class CarouselItemButton(BaseModel):
     url: Optional[str] = None  # For link buttons
 
 
+class Button(BaseModel):
+    type: str  # "reply" or other button types
+    text: str
+    payload: Optional[Union[Dict[str, Any], str]] = None  # For reply buttons
+    icon_url: Optional[str] = None  # Optional icon URL for buttons
+
+
 class CarouselItem(BaseModel):
     title: str
     description: Optional[str] = None
@@ -35,8 +42,9 @@ class AttachmentCreate(BaseModel):
     file_name: Optional[str] = None
     file_url: Optional[str] = None
     file_type: Optional[str] = None
-    type: str = "image"
+    type: str = "image"  # "image", "carousel", "buttons", etc.
     carousel: Optional[Dict[str, Any]] = None
+    buttons: Optional[List[Button]] = None  # For reply/action buttons
 
 
 class BaseChatMessageCreate(BaseModel):

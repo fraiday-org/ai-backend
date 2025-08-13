@@ -18,10 +18,15 @@ class Data(BaseModel):
     confidence_score: Optional[float] = Field(default=0.9)
 
 
+class Metadata(BaseModel):
+    close_session: Optional[bool] = False
+
+
 class AIResponse(BaseModel):
     status: str
     message: str
     data: Data
+    metadata: Optional[Metadata] = Field(default_factory=Metadata)
 
 
 class AIServiceRequest(BaseModel):

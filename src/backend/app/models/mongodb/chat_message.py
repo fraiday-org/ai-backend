@@ -41,6 +41,7 @@ class Attachment(EmbeddedDocument):
     file_url = fields.StringField()
     type = fields.StringField(default="image")  # "file", "image", "carousel"
     carousel = fields.DictField()
+    buttons = fields.ListField()
 
 
 class ChatMessage(BaseDocument):
